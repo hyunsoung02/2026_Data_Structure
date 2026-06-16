@@ -1,0 +1,618 @@
+# Word-game
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trie Visualizer Word Puzzle</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --panel-bg: #ffffff;
+            --text-dark: #2c3e50;
+            --primary: #3498db;
+            --success: #2ecc71;
+            --error: #e74c3c;
+            --border-radius: 16px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-color);
+            background-image: linear-gradient(135deg, #e0f2fe 0%, #fef3c7 50%, #f3e8ff 100%);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: var(--text-dark);
+            margin-bottom: 5px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        /* 메인 3단 레이아웃 */
+        .main-container {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
+            justify-content: center;
+            align-items: stretch;
+        }
+
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            box-sizing: border-box;
+        }
+
+        /* 1. 왼쪽 단어 목록 패널 */
+        .word-panel {
+            width: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .word-panel h3 {
+            margin-top: 0;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 10px;
+            color: var(--text-dark);
+        }
+
+        .word-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .word-item {
+            font-size: 18px;
+            font-weight: 700;
+            color: #94a3b8;
+            letter-spacing: 0.5px;
+            transition: all 0.3s;
+        }
+
+        .word-item.found {
+            color: #cbd5e0;
+            text-decoration: line-through;
+            opacity: 0.5;
+        }
+
+        /* 2. 중앙 보드판 패널 */
+        .board-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .timer {
+            font-size: 20px;
+            font-weight: bold;
+            background: #edf2f7;
+            padding: 5px 15px;
+            border-radius: 20px;
+            color: var(--text-dark);
+        }
+
+        .board-container {
+            position: relative;
+        }
+
+        #puzzle-board {
+            display: grid;
+            grid-template-columns: repeat(10, 42px);
+            grid-template-rows: repeat(10, 42px);
+            position: relative;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--text-dark);
+            z-index: 2;
+            cursor: pointer;
+        }
+
+        .cell.selecting {
+            background-color: rgba(52, 152, 219, 0.15);
+            border-radius: 6px;
+        }
+
+        .highlight-line {
+            position: absolute;
+            border-radius: 20px;
+            z-index: 1;
+            pointer-events: none;
+            transform-origin: left center;
+            height: 30px;
+            margin-top: -15px;
+            background-color: rgba(46, 204, 113, 0.35); /* 연초록 형광펜 */
+        }
+
+        /* 3. 오른쪽 Trie 탐색 시각화 패널 */
+        .trie-panel {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .trie-panel h3 {
+            margin-top: 0;
+            color: var(--text-dark);
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 10px;
+        }
+
+        .trie-status {
+            background: #f8fafc;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 15px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .trie-string {
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 16px;
+        }
+
+        /* 가상 트리 뷰 */
+        .trie-visual-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            max-height: 400px;
+            padding-right: 5px;
+        }
+
+        .trie-view-node {
+            display: flex;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            font-size: 14px;
+            font-weight: 600;
+            color: #64748b;
+            transition: all 0.2s;
+            border-left: 4px solid #cbd5e1;
+        }
+
+        /* 실시간 탐색 매칭 상태 스타일 */
+        .trie-view-node.active-path {
+            background: #e0f2fe;
+            color: #0369a1;
+            border-left-color: var(--primary);
+            transform: translateX(5px);
+        }
+
+        .trie-view-node.match-word {
+            background: #dcfce7;
+            color: #15803d;
+            border-left-color: var(--success);
+        }
+
+        /* 클리어 팝업 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-box {
+            background: white;
+            padding: 35px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+        }
+        .modal-box h2 { color: var(--success); margin-top: 0; }
+        .modal-box button {
+            background: var(--primary); color: white; border: none; padding: 10px 25px;
+            font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Trie Real-Time Visualizer Puzzle</h1>
+    <div class="subtitle">글자를 드래그하면 우측에서 Trie 자료구조의 실시간 $O(L)$ 탐색 노드가 동기화됩니다.</div>
+
+    <div class="main-container">
+        <div class="panel word-panel">
+            <h3>TARGET WORDS</h3>
+            <div class="word-list" id="word-list-box"></div>
+        </div>
+
+        <div class="panel board-panel">
+            <div class="timer" id="timer-display">00:00</div>
+            <div class="board-container">
+                <div id="puzzle-board"></div>
+            </div>
+        </div>
+
+        <div class="panel trie-panel">
+            <h3>TRIE EXPLORER</h3>
+            <div class="trie-status">
+                <div>현재 입력 경로 (Traversal):</div>
+                <div class="trie-string" id="trie-current-str">ROOT</div>
+                <div id="trie-feedback" style="margin-top:5px; color:#94a3b8; font-size:12px;">보드판을 드래그하세요.</div>
+            </div>
+            <div class="trie-visual-container" id="trie-tree-view"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="win-modal">
+        <div class="modal-box">
+            <h2>ALL WORDS FOUND! 🎉</h2>
+            <p id="final-time"></p>
+            <p style="font-size:14px; color:#7f8c8d;">Trie 자료구조를 이용하여 완벽하게 탐색을 마쳤습니다.</p>
+            <button onclick="location.reload()">다시 하기</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. 과제 핵심: Trie 자료구조 클래스 및 내부 시각화 메타데이터 설계
+        // ==========================================
+        class TrieNode {
+            constructor(char = '') {
+                this.char = char;
+                this.children = {};
+                this.isEndOfWord = false;
+                this.fullWord = ''; // 시각화 트래킹 용이용 단어 저장
+            }
+        }
+
+        class Trie {
+            constructor() {
+                this.root = new TrieNode('ROOT');
+            }
+
+            insert(word) {
+                let current = this.root;
+                for (let char of word) {
+                    if (!current.children[char]) {
+                        current.children[char] = new TrieNode(char);
+                    }
+                    current = current.children[char];
+                }
+                current.isEndOfWord = true;
+                current.fullWord = word;
+            }
+
+            // 시각화용 실시간 단계별 접두사 경로 상태 추적 함수
+            tracePath(searchStr) {
+                let current = this.root;
+                let pathNodes = ['ROOT'];
+                
+                for (let char of searchStr) {
+                    if (current.children[char]) {
+                        pathNodes.push(char);
+                        current = current.children[char];
+                    } else {
+                        return { path: pathNodes, isValid: false, isWord: false };
+                    }
+                }
+                return { 
+                    path: pathNodes, 
+                    isValid: true, 
+                    isWord: current.isEndOfWord 
+                };
+            }
+        }
+
+        // ==========================================
+        // 2. 게임 데이터 세팅 (이미지 데이터 기반)
+        // ==========================================
+        const targetWords = ["DRAFT", "STYLE", "EDIT", "ABSTRACT", "ESSAY", "METAPHOR", "SCOPE", "COMPARE"];
+        const gridData = [
+            ['L', 'M', 'E', 'S', 'S', 'A', 'Y', 'H', 'E', 'E'],
+            ['A', 'L', 'E', 'X', 'D', 'P', 'K', 'R', 'Q', 'Q'],
+            ['R', 'B', 'D', 'T', 'I', 'R', 'A', 'W', 'R', 'R'],
+            ['K', 'T', 'S', 'D', 'A', 'P', 'A', 'F', 'H', 'H'],
+            ['S', 'S', 'P', 'T', 'M', 'P', 'V', 'F', 'K', 'K'],
+            ['C', 'T', 'H', 'O', 'R', 'E', 'H', 'J', 'T', 'T'],
+            ['O', 'Y', 'C', 'G', 'T', 'A', 'D', 'O', 'C', 'C'],
+            ['P', 'L', 'D', 'N', 'J', 'T', 'C', 'I', 'R', 'R'],
+            ['E', 'E', 'B', 'D', 'L', 'W', 'L', 'T', 'T', 'T'],
+            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+        ];
+
+        const trie = new Trie();
+        targetWords.forEach(word => trie.insert(word));
+
+        const boardEl = document.getElementById('puzzle-board');
+        const wordListBox = document.getElementById('word-list-box');
+        const trieTreeView = document.getElementById('trie-tree-view');
+        
+        let foundWords = new Set();
+        let isMouseDown = false;
+        let startCell = null;
+        let selectedCells = [];
+
+        // 타이머 설정
+        let startTime = Date.now();
+        const timerInterval = setInterval(() => {
+            if (foundWords.size === targetWords.length) return;
+            let elapsed = Math.floor((Date.now() - startTime) / 1000);
+            let m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            let s = String(elapsed % 60).padStart(2, '0');
+            document.getElementById('timer-display').innerText = `${m}:${s}`;
+        }, 1000);
+
+        // ==========================================
+        // 3. UI 렌더링 및 인터페이스 빌드
+        // ==========================================
+        function init() {
+            targetWords.forEach(word => {
+                const div = document.createElement('div');
+                div.className = 'word-item';
+                div.id = `word-${word}`;
+                div.innerText = word;
+                wordListBox.appendChild(div);
+            });
+
+            for (let r = 0; r < 10; r++) {
+                for (let c = 0; c < 10; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.innerText = gridData[r][c];
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+
+                    cell.addEventListener('mousedown', (e) => startSelection(cell, e));
+                    cell.addEventListener('mouseenter', () => moveSelection(cell));
+                    boardEl.appendChild(cell);
+                }
+            }
+
+            window.addEventListener('mouseup', endSelection);
+            boardEl.addEventListener('touchstart', handleTouchStart, {passive: false});
+            boardEl.addEventListener('touchmove', handleTouchMove, {passive: false});
+            boardEl.addEventListener('touchend', endSelection);
+
+            renderTrieExplorer(''); // 빈 상태 뷰 초기화
+        }
+
+        // ==========================================
+        // 4. 핵심: 실시간 Trie Explorer 뷰 업데이트 함수
+        // ==========================================
+        function renderTrieExplorer(currentStr) {
+            trieTreeView.innerHTML = '';
+            
+            if (!currentStr) {
+                document.getElementById('trie-current-str').innerText = "ROOT (대기 중)";
+                document.getElementById('trie-feedback').innerText = "보드판의 글자를 연결하면 탐색 트리가 작동합니다.";
+                document.getElementById('trie-feedback').style.color = "#94a3b8";
+                return;
+            }
+
+            const result = trie.tracePath(currentStr);
+            
+            // 상단 텍스트 로그 출력 조작
+            let pathText = result.path.join(' ➔ ');
+            document.getElementById('trie-current-str').innerText = pathText;
+            
+            let feedback = document.getElementById('trie-feedback');
+            if (result.isWord) {
+                feedback.innerText = "🎯 [Match!] 완벽한 단어 노드에 도달했습니다.";
+                feedback.style.color = "var(--success)";
+            } else if (result.isValid) {
+                feedback.innerText = "🔍 [Valid Prefix] 자식 노드가 존재합니다. 탐색 진행 가능";
+                feedback.style.color = "var(--primary)";
+            } else {
+                feedback.innerText = "❌ [Dead End] 트리에 존재하지 않는 분기 경로입니다.";
+                feedback.style.color = "var(--error)";
+            }
+
+            // 가상 트리 계층 구조 시각화 빌드
+            // 1단계 분기 노드 목록들 출력
+            targetWords.forEach(word => {
+                let isMatchPath = false;
+                let stepCount = 0;
+
+                // 현재 글자 조합이 사전에 등록된 특정 단어 라인으로 타고 가고 있는지 확인
+                if (currentStr.length > 0 && word.startsWith(currentStr)) {
+                    isMatchPath = true;
+                    stepCount = currentStr.length;
+                }
+
+                const nodeRow = document.createElement('div');
+                nodeRow.className = 'trie-view-node';
+                
+                if (isMatchPath) {
+                    nodeRow.classList.add('active-path');
+                    if (word === currentStr) {
+                        nodeRow.classList.add('match-word');
+                    }
+                    nodeRow.innerHTML = `↳ 📂 ROOT ➔ <span style="color:var(--text-dark); font-weight:800;">${word.substring(0, stepCount)}</span>${word.substring(stepCount)} ${word === currentStr ? ' [종단 노드 ★]' : ''}`;
+                } else {
+                    nodeRow.innerHTML = `↳ 📁 ROOT ➔ ${word}`;
+                }
+
+                trieTreeView.appendChild(nodeRow);
+            });
+        }
+
+        // ==========================================
+        // 5. 드래그 조작 제어부
+        // ==========================================
+        function startSelection(cell, e) {
+            isMouseDown = true;
+            startCell = cell;
+            selectedCells = [cell];
+            cell.classList.add('selecting');
+            updateSelectionString();
+        }
+
+        function moveSelection(endCell) {
+            if (!isMouseDown || !startCell) return;
+
+            document.querySelectorAll('.cell.selecting').forEach(c => c.classList.remove('selecting'));
+
+            const r1 = parseInt(startCell.dataset.row), c1 = parseInt(startCell.dataset.col);
+            const r2 = parseInt(endCell.dataset.row), c2 = parseInt(endCell.dataset.col);
+
+            let dr = r2 - r1, dc = c2 - c1;
+            if (dr !== 0 && dc !== 0 && Math.abs(dr) !== Math.abs(dc)) return;
+
+            let steps = Math.max(Math.abs(dr), Math.abs(dc));
+            let stepR = dr === 0 ? 0 : dr / Math.abs(dr);
+            let stepC = dc === 0 ? 0 : dc / Math.abs(dc);
+
+            selectedCells = [];
+            for (let i = 0; i <= steps; i++) {
+                let nextR = r1 + (stepR * i);
+                let nextC = c1 + (stepC * i);
+                let target = document.querySelector(`.cell[data-row='${nextR}'][data-col='${nextC}']`);
+                if (target) {
+                    selectedCells.push(target);
+                    target.classList.add('selecting');
+                }
+            }
+            updateSelectionString();
+        }
+
+        function updateSelectionString() {
+            let currentStr = selectedCells.map(c => c.innerText).join('');
+            let reverseStr = currentStr.split('').reverse().join('');
+            
+            // 역방향과 정방향 중 트리에 존재하는 유효 경로 우선 매칭
+            let checkResult = trie.tracePath(currentStr);
+            let checkReverse = trie.tracePath(reverseStr);
+
+            if (!checkResult.isValid && checkReverse.isValid) {
+                renderTrieExplorer(reverseStr);
+            } else {
+                renderTrieExplorer(currentStr);
+            }
+        }
+
+        // 모바일 터치 대응 바인딩
+        function handleTouchStart(e) {
+            let touch = e.touches[0];
+            let target = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (target && target.classList.contains('cell')) {
+                startSelection(target, e);
+                e.preventDefault();
+            }
+        }
+
+        function handleTouchMove(e) {
+            if (!isMouseDown) return;
+            let touch = e.touches[0];
+            let target = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (target && target.classList.contains('cell')) {
+                moveSelection(target);
+                e.preventDefault();
+            }
+        }
+
+        function endSelection() {
+            if (!isMouseDown) return;
+            isMouseDown = false;
+            
+            document.querySelectorAll('.cell.selecting').forEach(c => c.classList.remove('selecting'));
+
+            if (selectedCells.length > 0) {
+                let word = selectedCells.map(c => c.innerText).join('');
+                let reverseWord = word.split('').reverse().join('');
+
+                let matchedWord = "";
+                if (trie.search(word)) matchedWord = word;
+                else if (trie.search(reverseWord)) {
+                    matchedWord = reverseWord;
+                    selectedCells.reverse();
+                }
+
+                if (matchedWord && !foundWords.has(matchedWord)) {
+                    foundWords.add(matchedWord);
+                    
+                    const wordItem = document.getElementById(`word-${matchedWord}`);
+                    wordItem.classList.add('found');
+                    
+                    drawHighlight(selectedCells);
+                    checkGameWin();
+                }
+            }
+            selectedCells = [];
+            startCell = null;
+            renderTrieExplorer(''); // 리셋 초기화
+        }
+
+        // 형광펜 라인 캡슐 생성 렌더러
+        function drawHighlight(cells) {
+            const first = cells[0];
+            const last = cells[cells.length - 1];
+
+            const x1 = first.offsetLeft + 21;
+            const y1 = first.offsetTop + 21;
+            const x2 = last.offsetLeft + 21;
+            const y2 = last.offsetTop + 21;
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx);
+
+            const highlight = document.createElement('div');
+            highlight.className = 'highlight-line';
+            highlight.style.width = `${length + 32}px`;
+            highlight.style.left = `${x1 - 16}px`;
+            highlight.style.top = `${y1}px`;
+            highlight.style.transform = `rotate(${angle}rad)`;
+
+            boardEl.appendChild(highlight);
+        }
+
+        function checkGameWin() {
+            if (foundWords.size === targetWords.length) {
+                clearInterval(timerInterval);
+                setTimeout(() => {
+                    document.getElementById('final-time').innerText = `소요 시간: ${document.getElementById('timer-display').innerText}`;
+                    document.getElementById('win-modal').style.display = 'flex';
+                }, 400);
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
