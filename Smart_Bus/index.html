@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartBus | 실시간 좌석 시스템</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        :root { --primary: #0066ff; --success: #00b894; --danger: #ff7675; }
+        body { font-family: sans-serif; text-align: center; background: #f8f9fa; padding: 20px; }
+        .bus-area { background: #dfe6e9; padding: 20px; border-radius: 30px; max-width: 400px; margin: auto; }
+        .seat-grid { display: grid; grid-template-columns: 1fr 1fr 0.5fr 1fr 1fr; gap: 10px; }
+        .seat { aspect-ratio: 1/1; border: 2px solid #ccc; border-radius: 5px; display: flex; align-items: center; justify-content: center; background: white; font-weight: bold; }
+        .available { border-color: var(--success); color: var(--success); }
+        .occupied { background: var(--danger); border-color: var(--danger); color: white; }
+        #canvas { width: 100%; border-radius: 10px; margin-top: 20px; background: #000; }
+        .stats { margin-bottom: 15px; font-weight: bold; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+    <h1>🚌 SmartBus Live</h1>
+    <div class="stats">잔여 좌석: <span id="count">12</span> / 12</div>
+    
+    <div class="bus-area">
+        <div class="seat-grid" id="seat-map"></div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+    <div id="msg" style="margin-top:10px; font-weight:bold;">QR 코드를 스캔하세요.</div>
+
+    <script>
+        const seats = {};
+        for(let i=1; i<=12; i++) seats[`seat-${i}`] = false;
+
+        function render() {
+            const map = document.getElementById('seat-map');
+            map.innerHTML = '';
+            let count = 0;
+            for(let i=1; i<=12; i++) {
+                if((i-1)%4 === 2) map.appendChild(document.createElement('div'));
+                const s = document.createElement('div');
+                const isFull = seats[`seat-${i}`];
+                s.className = `seat ${isFull ? 'occupied' : 'available'}`;
+                s.innerText = i;
+                map.appendChild(s);
+                if(!isFull) count++;
+            }
+            document.getElementById('count').innerText = count;
+        }
+
+        const video = document.createElement("video");
+        const canvas = document.getElementById("canvas").getContext("2d");
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(s => {
+            video.srcObject = s; video.setAttribute("playsinline", true); video.play();
+            requestAnimationFrame(tick);
+        });
+
+        function tick() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                const ce = document.getElementById("canvas");
+                ce.height = video.videoHeight; ce.width = video.videoWidth;
+                canvas.drawImage(video, 0, 0, ce.width, ce.height);
+                const code = jsQR(canvas.getImageData(0, 0, ce.width, ce.height).data, ce.width, ce.height);
+                if (code) {
+                    if (seats[code.data] === false) {
+                        seats[code.data] = true;
+                        document.getElementById('msg').innerText = "✅ " + code.data + " 스캔 완료!";
+                        render();
+                    }
+                }
+            }
+            requestAnimationFrame(tick);
+        }
+        render();
+    </script>
+</body>
+</html>
