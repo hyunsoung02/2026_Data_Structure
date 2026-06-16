@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>도형 패턴 틀린그림찾기</title>
+    <style>
+        body { text-align: center; font-family: 'Apple SD Gothic Neo', sans-serif; background: #222; color: white; margin: 0; padding: 20px; }
+        #menu { margin-bottom: 20px; padding: 30px; background: #333; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .btn { padding: 15px 30px; font-size: 20px; cursor: pointer; border: none; border-radius: 8px; margin: 10px; transition: 0.3s; font-weight: bold; }
+        .easy { background: #2ecc71; color: white; }
+        .hard { background: #e67e22; color: white; }
+        .extreme { background: #e74c3c; color: white; }
+        .btn:hover { opacity: 0.8; transform: scale(1.05); }
+        
+        #game-container { display: none; } /* 게임 시작 전에는 숨김 */
+        #timer { font-size: 36px; font-weight: bold; color: #f1c40f; margin: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        .canvas-container { display: flex; justify-content: center; gap: 30px; margin-top: 20px; }
+        canvas { border: 6px solid #f1c40f; background: #fff; cursor: crosshair; box-shadow: 0 0 25px rgba(241, 196, 15, 0.3); border-radius: 10px; }
+        #info { font-size: 22px; margin: 15px; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; }
+        .found { color: #e74c3c; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>🧩 도형 패턴 틀린그림찾기</h1>
+
+    <div id="menu">
+        <h2>난이도를 선택하세요 (제한시간 10분)</h2>
+        <p>복잡한 도형 패턴 속에서 틀린 곳을 찾아보세요!</p>
+        <button class="btn easy" onclick="startGame('easy')">쉬움 (3개 찾기)</button>
+        <button class="btn hard" onclick="startGame('hard')">어려움 (7개 찾기)</button>
+        <button class="btn extreme" onclick="startGame('extreme')">많이 어려움 (10개 찾기)</button>
+    </div>
+
+    <div id="game-container">
+        <div id="timer">남은 시간: 10:00</div>
+        <div id="info">
+            추상화 패턴 | 
+            찾은 개수: <span id="found-count" class="found">0</span> / <span id="total-count">0</span>
+        </div>
+        <div class="canvas-container">
+            <div><h3>원본</h3><canvas id="canvasLeft" width="400" height="400"></canvas></div>
+            <div><h3>찾아보세요!</h3><canvas id="canvasRight" width="400" height="400"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        // 연결리스트 노드 구조 (스테이지 정보)
+        class StageNode {
+            constructor(id, points, next = null) {
+                this.id = id;
+                this.allPoints = points; // 전체 가능한 정답 좌표들
+                this.targetPoints = [];  // 난이도에 따라 선택된 정답들
+                this.foundPoints = [];   // 사용자가 찾은 정답 인덱스
+                this.next = next;
+            }
+        }
+
+        // 복잡한 도형 패턴을 그리는 함수
+        function drawComplexPattern(ctx, isRightCanvas = false) {
+            ctx.clearRect(0, 0, 400, 400);
+            
+            // 1. 배경 그라데이션
+            const grd = ctx.createLinearGradient(0, 0, 400, 400);
+            grd.addColorStop(0, "#a1c4fd");
+            grd.addColorStop(1, "#c2e9fb");
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, 400, 400);
+
+            // 2. 수많은 무작위 도형들 (패턴)
+            for (let i = 0; i < 30; i++) {
+                ctx.fillStyle = `rgba(${Math.random()*255}, ${Math.random()*255}, ${Math.random()*255}, 0.5)`;
+                ctx.beginPath();
+                if (Math.random() > 0.5) {
+                    ctx.arc(Math.random()*400, Math.random()*400, Math.random()*40, 0, Math.PI*2);
+                } else {
+                    ctx.fillRect(Math.random()*400, Math.random()*400, Math.random()*50, Math.random()*50);
+                }
+                ctx.fill();
+            }
+
+            // 3. 정답이 될 '틀린 도형'들 그리기 (왼쪽 캔버스에만 원본 배치)
+            currentStage.allPoints.forEach((point, index) => {
+                const [x, y] = point;
+                
+                if (!isRightCanvas) {
+                    // 왼쪽(원본): 정답 위치에 특별한 도형 배치
+                    ctx.fillStyle = "#e74c3c"; // 빨간색
+                    ctx.beginPath();
+                    ctx.moveTo(x, y - 15);
+                    ctx.lineTo(x + 15, y + 15);
+                    ctx.lineTo(x - 15, y + 15);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    // 오른쪽(찾는곳): 난이도에 포함된 정답은 그리지 않거나 다르게 그림
+                    if (!currentStage.targetPoints.some(p => p[0] === x && p[1] === y)) {
+                        // 난이도에 포함되지 않은 정답은 원본과 똑같이 그려줌 (혼란 유도)
+                        ctx.fillStyle = "#e74c3c";
+                        ctx.beginPath();
+                        ctx.moveTo(x, y - 15);
+                        ctx.lineTo(x + 15, y + 15);
+                        ctx.lineTo(x - 15, y + 15);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    // 난이도에 포함된 정답 위치는 비워둠 (틀린 점)
+                }
+            });
+        }
+
+        // 전체 정답 데이터 (가상 좌표 10개)
+        const allPatternPoints = [
+            [50, 50], [150, 80], [250, 30], [350, 100], [100, 150],
+            [200, 200], [300, 250], [50, 300], [150, 350], [350, 380]
+        ];
+
+        const stage1 = new StageNode(1, allPatternPoints);
+        let currentStage = stage1;
+        let timeLeft = 600; // 10분
+        let timerInterval;
+
+        const canvasL = document.getElementById('canvasLeft');
+        const canvasR = document.getElementById('canvasRight');
+        const ctxL = canvasL.getContext('2d');
+        const ctxR = canvasR.getContext('2d');
+
+        function startGame(difficulty) {
+            let count = 3;
+            if (difficulty === 'hard') count = 7;
+            if (difficulty === 'extreme') count = 10;
+
+            // 난이도에 맞춰 타겟 포인트 추출
+            currentStage.targetPoints = currentStage.allPoints.slice(0, count);
+            
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            
+            // 패턴 그리기
+            drawComplexPattern(ctxL, false); // 왼쪽(원본)
+            drawComplexPattern(ctxR, true);  // 오른쪽(틀린곳)
+
+            startTimer();
+            document.getElementById('total-count').innerText = currentStage.targetPoints.length;
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                let min = Math.floor(timeLeft / 60);
+                let sec = timeLeft % 60;
+                document.getElementById('timer').innerText = `남은 시간: ${min}:${sec < 10 ? '0'+sec : sec}`;
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    alert("시간 초과! 게임 오버입니다.");
+                    location.reload();
+                }
+            }, 1000);
+        }
+
+        canvasR.addEventListener('mousedown', (e) => {
+            const rect = canvasR.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            for (let i = 0; i < currentStage.targetPoints.length; i++) {
+                if (currentStage.foundPoints.includes(i)) continue;
+
+                const [tx, ty] = currentStage.targetPoints[i];
+                const dist = Math.sqrt((x - tx)**2 + (y - ty)**2);
+                
+                if (dist < 25) {
+                    currentStage.foundPoints.push(i);
+                    
+                    // 정답 표시 (초록색 원)
+                    ctxR.strokeStyle = "#2ecc71";
+                    ctxR.lineWidth = 4;
+                    ctxR.beginPath(); ctxR.arc(tx, ty, 20, 0, Math.PI*2); ctxR.stroke();
+                    
+                    document.getElementById('found-count').innerText = currentStage.foundPoints.length;
+
+                    if (currentStage.foundPoints.length === currentStage.targetPoints.length) {
+                        clearInterval(timerInterval);
+                        alert(`축하합니다! ${currentStage.targetPoints.length}개의 틀린 도형을 모두 찾았습니다!`);
+                        location.reload();
+                    }
+                    return;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
